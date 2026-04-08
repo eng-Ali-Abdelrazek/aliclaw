@@ -9,6 +9,12 @@ async function start() {
         
         console.log(`Database initialized at: ${config.dbPath}`);
         initDb();
+
+        console.log('--- Startup Config Check ---');
+        console.log(`Whitelist: ${config.whitelistedUserIds.join(', ')}`);
+        console.log(`Groq/xAI Key: ${config.groqApiKey ? '✅ Present' : '❌ Missing'}`);
+        console.log(`Gemini Keys: ${config.geminiApiKeys.length > 0 ? `✅ ${config.geminiApiKeys.length} Present` : '❌ Missing'}`);
+        console.log('----------------------------');
         
         const bot = setupBot();
         console.log('Telegram Bot configured... Starting long polling.');

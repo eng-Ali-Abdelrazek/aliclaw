@@ -17,10 +17,15 @@ const parseWhitelist = (idsStr: string | undefined): number[] => {
   return idsStr.split(',').map(id => parseInt(id.trim(), 10)).filter(id => !isNaN(id));
 };
 
+const parseApiKeyList = (keyStr: string | undefined): string[] => {
+  if (!keyStr) return [];
+  return keyStr.split(',').map(key => key.trim()).filter(key => key.length > 0);
+};
+
 export const config = {
   telegramBotToken: (process.env.TELEGRAM_BOT_TOKEN || '').trim(),
   groqApiKey: (process.env.GROQ_API_KEY || '').trim(),
-  geminiApiKey: (process.env.GEMINI_API_KEY || '').trim(),
+  geminiApiKeys: parseApiKeyList(process.env.GEMINI_API_KEY),
   dbPath: getMemoryDbPath(),
   whitelistedUserIds: parseWhitelist(process.env.WHITELISTED_USER_IDS),
 };
@@ -33,10 +38,10 @@ export function validateConfig() {
   if (!config.groqApiKey) {
     console.warn('⚠️  GROQ_API_KEY not set — Groq/xAI models will be skipped.');
   }
-  if (!config.geminiApiKey) {
+  if (config.geminiApiKeys.length === 0) {
     console.warn('⚠️  GEMINI_API_KEY not set — Gemini fallback will be unavailable.');
   }
-  if (!config.groqApiKey && !config.geminiApiKey) {
+  if (!config.groqApiKey && config.geminiApiKeys.length === 0) {
     throw new Error('At least one LLM API key is required (GROQ_API_KEY or GEMINI_API_KEY).');
   }
 }

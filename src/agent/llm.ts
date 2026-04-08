@@ -5,7 +5,7 @@ import { getGroqTools, getGeminiTools } from '../tools/index.js';
 import { ChatMessage } from '../db/memory.js';
 
 let groq: Groq | null = null;
-let genAI: GoogleGenerativeAI | null = null;
+let genAIClients: GoogleGenerativeAI[] = [];
 
 if (config.groqApiKey) {
     const isXAI = config.groqApiKey.startsWith('xai-');
@@ -15,8 +15,8 @@ if (config.groqApiKey) {
     });
 }
 
-if (config.geminiApiKey) {
-    genAI = new GoogleGenerativeAI(config.geminiApiKey);
+if (config.geminiApiKeys.length > 0) {
+    genAIClients = config.geminiApiKeys.map(key => new GoogleGenerativeAI(key));
 }
 
 export interface LLMResponse {
@@ -102,7 +102,7 @@ export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Pr
 }
 
 async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string): Promise<LLMResponse> {
-  if (!genAI) {
+  if (genAIClients.length === 0) {
       throw new Error("Both Groq/xAI and Gemini failed/are unavailable.");
   }
   
@@ -114,39 +114,63 @@ async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string)
   const lastMessage = messages[messages.length - 1];
 
   for (const modelName of GEMINI_MODELS) {
-    try {
-      const model = genAI.getGenerativeModel({
-        model: modelName,
-        systemInstruction: systemPrompt,
-        tools: getGeminiTools() as any,
-      });
-    
-      const chat = model.startChat({ history });
-      const result = await chat.sendMessage(lastMessage.content);
-      const response = result.response;
-      
-      const functionCall = response.functionCalls()?.[0];
-      if (functionCall) {
-        return {
-          content: response.text() || null,
-          toolCall: {
-            name: functionCall.name,
-            arguments: functionCall.args,
+    // Try each available key for this model
+    for (let i = 0; i < genAIClients.length; i++) {
+        const client = genAIClients[i];
+        try {
+          const model = client.getGenerativeModel({
+            model: modelName,
+            systemInstruction: systemPrompt,
+            tools: getGeminiTools() as any,
+          });
+        
+          const chat = model.startChat({ history });
+          const result = await chat.sendMessage(lastMessage.content);
+          const response = result.response;
+          
+          const functionCall = response.functionCalls()?.[0];
+          if (functionCall) {
+            return {
+              content: response.text() || null,
+              toolCall: {
+                name: functionCall.name,
+                arguments: functionCall.args,
+              }
+            };
           }
-        };
-      }
-    
-      return { content: response.text() };
-      
-    } catch (error: any) {
-        console.error(`[Gemini Error with ${modelName}]: ${error.message}`);
-         if (error.status === 401 || error.status === 403) {
-             throw new Error('Authentication failed for Gemini.');
-         }
-         // Wait before trying next Gemini model to respect rate limits
-         await wait(2000);
+        
+          return { content: response.text() };
+          
+        } catch (error: any) {
+            const isLastKey = i === genAIClients.length - 1;
+            console.error(`[Gemini Key #${i+1} Error with ${modelName}]: ${error.message}`);
+
+            // If it's an auth error, we should probably stop using this key
+            if (error.status === 401 || error.status === 403) {
+                console.error(`Key #${i+1} seems invalid. Skipping.`);
+                if (isLastKey && modelName === GEMINI_MODELS[GEMINI_MODELS.length - 1]) {
+                    throw new Error('Authentication failed for all Gemini keys.');
+                }
+                continue; // Try next key
+            }
+
+            // If it's a rate limit (429), try the next key immediately
+            if (error.status === 429) {
+                console.warn(`Key #${i+1} rate limited. Rotating to next key...`);
+                continue;
+            }
+
+            // For other errors, if it's the last key, move to next model
+            if (isLastKey) {
+                console.log(`All keys failed for ${modelName}. Trying next model...`);
+                await wait(2000);
+            } else {
+                // Try next key after a short rest
+                await wait(500);
+            }
+        }
     }
   }
 
-  throw new Error("All Groq/xAI and Gemini models failed to process the request. Please check your API quotas.");
+  throw new Error("All Groq/xAI and Gemini models/keys failed to process the request. Please check your API quotas.");
 }
