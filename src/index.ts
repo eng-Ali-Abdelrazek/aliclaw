@@ -1,6 +1,16 @@
 import { config, validateConfig } from './config/env.js';
 import { setupBot } from './bot.js';
 import { initDb } from './db/index.js';
+import http from 'http';
+
+// Dummy HTTP server to satisfy Railway's port healthcheck
+const port = process.env.PORT || 8080;
+http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('AliClaw Bot is live and polling!\n');
+}).listen(port, () => {
+    console.log(`Dummy web server listening on port ${port} to satisfy cloud providers.`);
+});
 
 async function start() {
     try {
