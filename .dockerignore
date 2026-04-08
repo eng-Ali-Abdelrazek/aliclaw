@@ -1,0 +1,12 @@
+.env
+*.env
+node_modules
+dist
+*.db
+*.db-shm
+*.db-wal
+firebase-service-account.json
+aliclaw-memory-firebase-adminsdk-fbsvc-a3369a046f.json
+credentials.json
+token.json
+claude-superskills

@@ -11,6 +11,7 @@ build
 credentials.json
 token.json
 firebase-service-account.json
+aliclaw-memory-firebase-adminsdk-fbsvc-a3369a046f.json
 
 # Local Databases
 *.db
