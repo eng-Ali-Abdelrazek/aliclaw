@@ -29,21 +29,24 @@ export interface LLMResponse {
 const GROQ_MODELS = [
   'llama-3.3-70b-versatile',
   'llama-3.1-8b-instant',
-  'mixtral-8x7b-32768',
-  'gemma2-9b-it'
+  'mixtral-8x7b-32768'
+];
+
+const XAI_MODELS = [
+  'grok-2-1212',
+  'grok-2-latest',
+  'grok-beta'
 ];
 
 const GEMINI_MODELS = [
-  'gemini-2.5-flash',
-  'gemini-2.5-pro',
   'gemini-2.0-flash',
-  'gemini-1.5-pro-latest',
-  'gemini-pro'
+  'gemini-1.5-flash',
+  'gemini-1.5-pro'
 ];
 
 export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Promise<LLMResponse> {
   if (!groq) {
-      console.log('Groq not initialized, going straight to Gemini...');
+      console.log('Groq/xAI not initialized, going straight to Gemini...');
       return askGeminiFallback(messages, systemPrompt);
   }
 
@@ -53,7 +56,10 @@ export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Pr
   }
   groqMessages.push(...messages);
 
-  for (const model of GROQ_MODELS) {
+  const isXAI = config.groqApiKey.startsWith('xai-');
+  const modelsToTry = isXAI ? XAI_MODELS : GROQ_MODELS;
+
+  for (const model of modelsToTry) {
       try {
         const chatCompletion = await groq.chat.completions.create({
           messages: groqMessages as any,
@@ -78,13 +84,11 @@ export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Pr
 
         return { content: message.content || null };
       } catch (error: any) {
-         console.error(`[Groq Error with ${model}]: ${error.message}`);
-         // If it's a critical auth error, stop trying Groq models and break to Gemini
+         console.error(`[${isXAI ? 'xAI' : 'Groq'} Error with ${model}]: ${error.message}`);
          if (error.status === 401 || error.status === 403) {
-             console.error('Authentication failed for Groq. Aborting Groq loop.');
+             console.error('Authentication failed. Aborting loop.');
              break;
          }
-         // Otherwise, try the next model
       }
   }
   
@@ -94,7 +98,7 @@ export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Pr
 
 async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string): Promise<LLMResponse> {
   if (!genAI) {
-      throw new Error("Both Groq and Gemini failed/are unavailable.");
+      throw new Error("Both Groq/xAI and Gemini failed/are unavailable.");
   }
   
   const history = messages.slice(0, -1).map(msg => ({
@@ -134,9 +138,8 @@ async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string)
          if (error.status === 401 || error.status === 403) {
              throw new Error('Authentication failed for Gemini.');
          }
-         // Otherwise try the next Gemini model
     }
   }
 
-  throw new Error("All Groq and Gemini models failed to process the request.");
+  throw new Error("All Groq/xAI and Gemini models failed to process the request.");
 }
