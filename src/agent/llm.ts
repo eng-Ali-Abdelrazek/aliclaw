@@ -142,35 +142,55 @@ async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string)
           return { content: response.text() };
           
         } catch (error: any) {
-            const isLastKey = i === genAIClients.length - 1;
-            console.error(`[Gemini Key #${i+1} Error with ${modelName}]: ${error.message}`);
+          const isLastKey = i === genAIClients.length - 1;
+          const errorMessage = error.message || '';
+          console.error(`[Gemini Key #${i+1} Error with ${modelName}]: ${errorMessage}`);
 
-            // If it's an auth error, we should probably stop using this key
-            if (error.status === 401 || error.status === 403) {
-                console.error(`Key #${i+1} seems invalid. Skipping.`);
-                if (isLastKey && modelName === GEMINI_MODELS[GEMINI_MODELS.length - 1]) {
-                    throw new Error('Authentication failed for all Gemini keys.');
-                }
-                continue; // Try next key
-            }
+          // If it's an auth error, skip this key
+          if (error.status === 401 || error.status === 403 || errorMessage.includes('401') || errorMessage.includes('403')) {
+              console.error(`Key #${i+1} seems invalid. Skipping.`);
+              if (isLastKey && modelName === GEMINI_MODELS[GEMINI_MODELS.length - 1]) {
+                  throw new Error('Authentication failed for all Gemini keys.');
+              }
+              continue; // Try next key
+          }
 
-            // If it's a rate limit (429), try the next key immediately
-            if (error.status === 429) {
-                console.warn(`Key #${i+1} rate limited. Rotating to next key...`);
-                continue;
-            }
+          // More aggressive detection of rate limits or quota issues
+          const isRateLimited = error.status === 429 || 
+                               errorMessage.includes('429') || 
+                               errorMessage.toLowerCase().includes('quota') ||
+                               errorMessage.toLowerCase().includes('rate limit');
 
-            // For other errors, if it's the last key, move to next model
-            if (isLastKey) {
-                console.log(`All keys failed for ${modelName}. Trying next model...`);
-                await wait(2000);
-            } else {
-                // Try next key after a short rest
-                await wait(500);
-            }
+          if (isRateLimited) {
+              console.warn(`Key #${i+1} rate limited or quota full. Rotating to next key...`);
+              continue; // Try next key immediately
+          }
+
+          // For other errors, if it's the last key, move to next model
+          if (isLastKey) {
+              console.log(`All keys failed for ${modelName}. Trying next model...`);
+              await wait(2000);
+          } else {
+              // Try next key after a short rest for non-quota errors
+              await wait(500);
+          }
         }
     }
   }
 
-  throw new Error("All Groq/xAI and Gemini models/keys failed to process the request. Please check your API quotas.");
+  // --- LAST RESORT FALLBACK ---
+  // If we reach here, every model and every key failed.
+  // One last try: gemini-1.5-flash with NO tools and NO system prompt.
+  console.log('--- EMERGENCY LAST RESORT ---');
+  for (const client of genAIClients) {
+    try {
+      const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const result = await model.generateContent(lastMessage.content);
+      return { content: result.response.text() || "I'm experiencing heavy load but I'm back!" };
+    } catch (e) {
+      continue; // Move to next key if even this fails
+    }
+  }
+
+  throw new Error("All Groq/xAI and Gemini models/keys failed. Please check your API quotas.");
 }
