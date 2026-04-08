@@ -11,9 +11,10 @@ if (config.groqApiKey) {
     const isXAI = config.groqApiKey.startsWith('xai-');
     groq = new Groq({ 
         apiKey: config.groqApiKey,
-        baseURL: isXAI ? 'https://api.x.ai/v1' : undefined
+        baseURL: isXAI ? 'https://api.x.ai/v1' : undefined // xAI standard base
     });
 }
+
 if (config.geminiApiKey) {
     genAI = new GoogleGenerativeAI(config.geminiApiKey);
 }
@@ -28,8 +29,7 @@ export interface LLMResponse {
 
 const GROQ_MODELS = [
   'llama-3.3-70b-versatile',
-  'llama-3.1-8b-instant',
-  'mixtral-8x7b-32768'
+  'llama-3.1-8b-instant'
 ];
 
 const XAI_MODELS = [
@@ -39,10 +39,13 @@ const XAI_MODELS = [
 ];
 
 const GEMINI_MODELS = [
-  'gemini-2.0-flash',
   'gemini-1.5-flash',
-  'gemini-1.5-pro'
+  'gemini-1.5-pro',
+  'gemini-2.0-flash-exp'
 ];
+
+// Helper to wait avoid hitting rate limits too fast
+const wait = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Promise<LLMResponse> {
   if (!groq) {
@@ -89,6 +92,8 @@ export async function askLLM(messages: ChatMessage[], systemPrompt?: string): Pr
              console.error('Authentication failed. Aborting loop.');
              break;
          }
+         // Wait before trying next model
+         await wait(1000);
       }
   }
   
@@ -138,8 +143,10 @@ async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string)
          if (error.status === 401 || error.status === 403) {
              throw new Error('Authentication failed for Gemini.');
          }
+         // Wait before trying next Gemini model to respect rate limits
+         await wait(2000);
     }
   }
 
-  throw new Error("All Groq/xAI and Gemini models failed to process the request.");
+  throw new Error("All Groq/xAI and Gemini models failed to process the request. Please check your API quotas.");
 }

@@ -18,9 +18,9 @@ const parseWhitelist = (idsStr: string | undefined): number[] => {
 };
 
 export const config = {
-  telegramBotToken: process.env.TELEGRAM_BOT_TOKEN || '',
-  groqApiKey: process.env.GROQ_API_KEY || '',
-  geminiApiKey: process.env.GEMINI_API_KEY || '',
+  telegramBotToken: (process.env.TELEGRAM_BOT_TOKEN || '').trim(),
+  groqApiKey: (process.env.GROQ_API_KEY || '').trim(),
+  geminiApiKey: (process.env.GEMINI_API_KEY || '').trim(),
   dbPath: getMemoryDbPath(),
   whitelistedUserIds: parseWhitelist(process.env.WHITELISTED_USER_IDS),
 };
