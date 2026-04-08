@@ -14,22 +14,36 @@ export function initDb() {
     const envCreds = process.env.FIREBASE_CREDENTIALS;
 
     if (envCreds) {
+      console.log('Firebase: Attempting to initialize using FIREBASE_CREDENTIALS environment variable.');
       try {
-        // Try parsing as JSON string first
-        credentialData = cert(JSON.parse(envCreds));
+        // Try parsing as JSON string (this is preferred for Railway)
+        const parsed = JSON.parse(envCreds);
+        credentialData = cert(parsed);
+        console.log('Firebase: Successfully parsed credentials from environment variable.');
       } catch (e) {
-        // If not JSON, assume it's a path
+        // If not JSON, assume it's a path (less common in cloud)
+        console.log('Firebase: Credentials env var is not JSON, treating as file path.');
         credentialData = cert(envCreds);
       }
     } else {
       // Fallback to local file
       const serviceAccountPath = path.join(__dirname, '../../firebase-service-account.json');
+      console.log(`Firebase: FIREBASE_CREDENTIALS env var not found. Falling back to local file: ${serviceAccountPath}`);
       credentialData = cert(serviceAccountPath);
     }
 
-    initializeApp({
-      credential: credentialData
-    });
+    try {
+      initializeApp({
+        credential: credentialData
+      });
+      console.log('Firebase: Application initialized successfully.');
+    } catch (err: any) {
+      console.error('Firebase: Initialization failed!');
+      if (err.code === 'ENOENT') {
+         throw new Error('CRITICAL: Firebase Credentials missing! Please set the FIREBASE_CREDENTIALS environment variable in Railway with your service account JSON contents.');
+      }
+      throw err;
+    }
   }
   db = getFirestore();
   return db;

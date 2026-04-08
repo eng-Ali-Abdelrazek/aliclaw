@@ -39,9 +39,9 @@ const XAI_MODELS = [
 ];
 
 const GEMINI_MODELS = [
-  'gemini-1.5-flash',
-  'gemini-1.5-pro',
-  'gemini-2.0-flash-exp'
+  'gemini-2.5-flash',
+  'gemini-2.5-pro',
+  'gemini-3.1-pro-preview'
 ];
 
 // Helper to wait avoid hitting rate limits too fast
@@ -180,11 +180,11 @@ async function askGeminiFallback(messages: ChatMessage[], systemPrompt?: string)
 
   // --- LAST RESORT FALLBACK ---
   // If we reach here, every model and every key failed.
-  // One last try: gemini-1.5-flash with NO tools and NO system prompt.
+  // One last try: gemini-2.5-flash with NO tools and NO system prompt.
   console.log('--- EMERGENCY LAST RESORT ---');
   for (const client of genAIClients) {
     try {
-      const model = client.getGenerativeModel({ model: 'gemini-1.5-flash' });
+      const model = client.getGenerativeModel({ model: 'gemini-2.5-flash' });
       const result = await model.generateContent(lastMessage.content);
       return { content: result.response.text() || "I'm experiencing heavy load but I'm back!" };
     } catch (e) {
